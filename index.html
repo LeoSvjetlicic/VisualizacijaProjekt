@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>It's free real estate</title>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <script src="https://d3js.org/topojson.v3.min.js"></script>
+    <link rel="stylesheet" href="indexStyle.css" />
+  </head>
+  <body>
+    <div class="main-title">Visualization of Real Estate Data in the US</div>
+    <div id="topic">Number of houses</div>
+    <!-- Topic Display -->
+    <div class="map-container">
+      <div id="map"></div>
+    </div>
+    <div id="buttons">
+      <button onclick="updateMap('num_houses')">Number of Houses</button>
+      <button onclick="updateMap('num_baths')">
+        Average Number of Bathrooms
+      </button>
+      <button onclick="updateMap('num_beds')">
+        Average Number of Bedrooms
+      </button>
+      <button onclick="updateMap('price')">Average Price</button>
+      <button onclick="updateMap('acre_lot')">Average Acre Lot</button>
+      <button onclick="updateMap('house_size')">Average House Size</button>
+    </div>
+    <script>
+      // Set up the SVG dimensions
+      const width = 960;
+      const height = 600;
+      let selectedStates = [];
+      let attribute = "num_houses"; // Default attribute
+      let stateAttributes; // Declare stateAttributes as a global variable
+      var newTabFilteredData = null;
+      // Create an SVG element
+      const svg = d3
+        .select("#map")
+        .append("svg")
+        .attr("width", width)
+        .attr("height", height);
+
+      // Set up the map projection
+      const projection = d3
+        .geoAlbersUsa()
+        .scale(1000)
+        .translate([width / 2, height / 2]);
+
+      const path = d3.geoPath().projection(projection);
+
+      // Create tooltip
+      const tooltip = d3
+        .select("body")
+        .append("div")
+        .attr("class", "tooltip")
+        .style("opacity", 0);
+
+      // Load GeoJSON data from external file
+      d3.json("us.json")
+        .then((geojsonData) => {
+          // Draw the map
+          svg
+            .append("g")
+            .attr("class", "map")
+            .selectAll("path")
+            .data(geojsonData.features)
+            .enter()
+            .append("path")
+            .attr("d", path)
+            .attr("class", "state")
+            .style("fill-opacity", 0.5); // Set initial opacity
+
+          // Create legend gradient
+          const defs = svg.append("defs");
+          const linearGradient = defs
+            .append("linearGradient")
+            .attr("id", "legendGradient")
+            .attr("x1", "0%")
+            .attr("y1", "0%")
+            .attr("x2", "0%")
+            .attr("y2", "100%");
+
+          // Append legend
+          svg
+            .append("rect")
+            .attr("x", 20)
+            .attr("y", 150) // Adjusted y position
+            .attr("width", 20)
+            .attr("height", 200)
+            .style("fill", "url(#legendGradient)");
+
+          // Append legend text
+          const legendScale = d3.scaleLinear().range([200, 0]);
+          const legendAxis = d3.axisRight(legendScale).tickSize(6).ticks(5);
+          svg
+            .append("g")
+            .attr("class", "legend")
+            .attr("transform", "translate(40,150)") // Adjusted y position
+            .call(legendAxis);
+
+          // Load CSV data
+          d3.csv("data.csv")
+            .then((data) => {
+              // Filter elements with status == 0
+              const filteredData = data.filter((d) => d.status == "for_sale");
+              newTabFilteredData = filteredData;
+
+              // Group items by state and calculate attribute sums and averages
+              stateAttributes = calculateStateAttributes(filteredData);
+
+              updateMap(attribute);
+            })
+            .catch((error) => {
+              console.error("Error loading or parsing CSV data:", error);
+            });
+        })
+        .catch((error) => {
+          console.error("Error loading or parsing GeoJSON data:", error);
+        });
+
+      function calculateStateAttributes(data) {
+        const stateAttributes = new Map();
+
+        data.forEach((d) => {
+          const state = d.state;
+
+          if (!stateAttributes.has(state)) {
+            stateAttributes.set(state, {
+              num_houses: 0,
+              num_baths: 0,
+              num_beds: 0,
+              price: 0,
+              acre_lot: 0,
+              house_size: 0,
+            });
+          }
+
+          const attributes = stateAttributes.get(state);
+          
+          attributes.num_houses += 1;
+          attributes.num_baths += +d.bath || 0;
+          attributes.num_beds += +d.bed || 0;
+          attributes.price += +d.price || 0;
+          attributes.acre_lot += +d.acre_lot || 0;
+          attributes.house_size += +d.house_size || 0;
+        });
+
+        // Calculate averages for each attribute
+        stateAttributes.forEach((attributes, state) => {
+          const numRecords = attributes.num_houses;
+          attributes.num_baths = attributes.num_baths / numRecords || 0; // Provide default value
+          attributes.num_beds = attributes.num_beds / numRecords || 0; // Provide default value
+          attributes.price = attributes.price / numRecords;
+          attributes.acre_lot = attributes.acre_lot / numRecords;      
+
+          attributes.house_size = attributes.house_size / numRecords;
+        });
+
+        return stateAttributes;
+      }
+
+      function updateMap(selectedAttribute) {
+        const colorSchemes = {
+          num_houses: ["#008080", "rgba(0, 128, 128, 0)"], // Teal
+          num_baths: ["#0000ff", "rgba(224, 236, 244, 0)"], // Light purple
+          num_beds: ["#ff6e00", "rgba(254, 227, 145, 0)"], // Light orange
+          price: ["#faec00", "rgba(237, 248, 177, 0)"], // Light blue
+          acre_lot: ["#0b6623", "rgba(199, 233, 192, 0)"], // Light green
+          house_size: ["#ff0000", "rgba(254, 224, 139, 0)"], // Light pink
+          // Light pink
+        };
+        const color = colorSchemes[selectedAttribute];
+
+        // Update color scale domain based on current attribute values
+        const maxAttributeValue = Math.max(
+          ...Array.from(stateAttributes.values(), (d) => d[selectedAttribute])
+        );
+        const minAttributeValue = Math.min(
+          ...Array.from(stateAttributes.values(), (d) => d[selectedAttribute])
+        );
+        var rememberOpacity = null;
+        var rememberColor = null;
+        const opacityScale = d3
+          .scaleLinear()
+          .domain([minAttributeValue, maxAttributeValue])
+          .range([0.1, 0.9]);
+
+        svg
+          .selectAll(".state")
+          .style("fill-opacity", function (d) {
+            const state = d.properties ? d.properties.name : null;
+            if (!state || !stateAttributes.has(state)) return 0.1;
+            const value = stateAttributes.get(state)[selectedAttribute];
+            return value ? opacityScale(value) : 0.1;
+          })
+          .style("fill", color[0])
+          .on("mouseover", function (event, d) {
+            const unit = (attribute) => {
+                      switch (attribute) {
+                        case "acre_lot":
+                          return "acres";
+                        case "bath":
+                          return "baths";
+                        case "bed":
+                          return "beds";
+                        case "house_size":
+                          return "sqft";
+                        case "price":
+                          return "$";
+                        default:
+                          return "units";
+                      }
+                    };
+            rememberOpacity = d3.select(this).style("fill-opacity");
+            rememberColor = d3.select(this).style("fill");
+            d3.select(this).style("fill", "lightgray").style("fill-opacity", 1);
+
+            const state = d.properties ? d.properties.name : null;
+            if (!state || !stateAttributes.has(state)) return;
+            const value = stateAttributes.get(state)[selectedAttribute];
+            tooltip
+              .style("opacity", 0.9)
+              .html(`${state}: ${value ? value.toFixed(2) : "No data"} ${unit(selectedAttribute)}`)
+              .style("left", event.pageX + "px")
+              .style("top", event.pageY - 28 + "px");
+          })
+          .on("mouseout", function () {
+            d3.select(this)
+              .style("fill", rememberColor) // Reset fill color to the original color
+              .style("fill-opacity", rememberOpacity);
+            tooltip.style("opacity", 0);
+          })
+          .on("click", function () {
+            const stateName = d3.select(this).datum().properties.name;
+            if (
+              selectedStates.length < 2 &&
+              !selectedStates.includes(stateName)
+            ) {
+              selectedStates.push(stateName);
+              if (selectedStates.length === 2) {
+                // Calculate sum of attributes for each state
+                const selectedData = newTabFilteredData.filter(
+                  (d) =>
+                    d.state === selectedStates[0] ||
+                    d.state === selectedStates[1]
+                );
+                const stateAttributes = calculateStateAttributes(selectedData);
+                // Open new window for comparison chart
+                let myTab = window.open("graph.html", "_blank");
+                myTab.onload = function () {
+                  myTab.postMessage(stateAttributes, "*");
+                  selectedStates = [];
+                };
+              }
+            }
+          });
+
+        // Update legend gradient stops
+        const linearGradient = d3.select("#legendGradient");
+        linearGradient.selectAll("stop").remove(); // Remove existing stops
+        linearGradient
+          .append("stop")
+          .attr("offset", "0%")
+          .attr("stop-color", color[0]); // Darkest blue
+        linearGradient
+          .append("stop")
+          .attr("offset", "100%")
+          .attr("stop-color", color[1]);
+
+        // Update legend axis
+        const legendScale = d3
+          .scaleLinear()
+          .domain([minAttributeValue, maxAttributeValue])
+          .range([200, 0]);
+        const legendAxis = d3.axisRight(legendScale).tickSize(6).ticks(5);
+        svg.select(".legend").call(legendAxis);
+
+        // Update topic based on selected attribute
+        const topicText = getTopicText(selectedAttribute);
+        document.getElementById("topic").innerText = topicText;
+      }
+
+      function getTopicText(attribute) {
+        switch (attribute) {
+          case "acre_lot":
+            return "Average number of acres";
+          case "num_baths":
+            return "Average number of bathrooms";
+          case "num_beds":
+            return "Average number of bedrooms";
+          case "house_size":
+            return "Average size of house";
+          case "price":
+            return "Average price";
+          default:
+            return "Number of houses";
+        }
+      }
+    </script>
+  </body>
+</html>

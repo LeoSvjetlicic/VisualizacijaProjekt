@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bar Chart</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link rel="stylesheet" href="graphStyle.css" />
+  </head>
+  <body>
+    <div class="main-title">Comparison of Two States</div>
+    <div class="container">
+      <div id="chart"></div>
+      <script>
+        window.addEventListener("message", function (event) {
+          const mapObject = event.data;
+          const initialData = {};
+
+          for (const [key, value] of mapObject.entries()) {
+            initialData[key] = value;
+          }
+
+          var data = scaleData(initialData);
+
+          const svgWidth = 800;
+          const svgHeight = 500;
+          const margin = { top: 20, right: 20, bottom: 70, left: 150 };
+          const chartWidth = svgWidth - margin.left - margin.right;
+          const chartHeight = svgHeight - margin.top - margin.bottom;
+
+          const svg = d3
+            .select("#chart")
+            .append("svg")
+            .attr("width", svgWidth)
+            .attr("height", svgHeight);
+
+          const chart = svg
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+
+          const yScale = d3
+            .scaleBand()
+            .domain(Object.keys(data))
+            .range([0, chartHeight])
+            .padding(0.1);
+
+          const xScale = d3
+            .scaleLinear()
+            .domain([0, 10])
+            .range([0, chartWidth / 3]);
+
+          const maxLeftBarWidth = d3.max(Object.values(data), (d) =>
+            d3.max(Object.values(d), (v) => xScale(v))
+          );
+
+          const textWidth = 100;
+
+          const rightBarX = maxLeftBarWidth + textWidth + 20;
+
+          const attributes = Object.keys(data[Object.keys(data)[0]]);
+          const numAttributes = attributes.length;
+          const barHeight = yScale.bandwidth() / numAttributes;
+          const names = Object.keys(initialData);
+
+          attributes.forEach((attr, attrIndex) => {
+            const attrGroup = chart
+              .append("g")
+              .attr("class", `attributeGroup ${attr}`)
+              .attr("transform", `translate(0, ${attrIndex * barHeight * 2})`);
+
+            Object.entries(data).forEach(([state, values], stateIndex) => {
+              if (state == names[0]) {
+                attrGroup
+                  .append("rect")
+                  .attr("class", "bar-left")
+                  .attr("x", maxLeftBarWidth)
+                  .attr("y", stateIndex * barHeight)
+                  .attr("width", 0)
+                  .attr("height", barHeight)
+                  .attr("rx", 8)
+                  .attr("ry", 8)
+                  .on("mouseover", function (event, d) {
+                    const unit = (attribute) => {
+                      switch (attribute) {
+                        case "acre_lot":
+                          return "acres";
+                        case "bath":
+                          return "baths";
+                        case "bed":
+                          return "beds";
+                        case "house_size":
+                          return "sqft";
+                        case "price":
+                          return "$";
+                        default:
+                          return "units";
+                      }
+                    };
+                    tooltip
+                      .style("opacity", 0.9)
+                      .html(
+                        `${
+                          initialData[state][attr]
+                            ? typeof initialData[state][attr] === "number"
+                              ? initialData[state][attr].toFixed(2)
+                              : initialData[state][attr]
+                            : "No data"
+                        } ${unit(attr)}`
+                      )
+                      .style("left", event.pageX + "px")
+                      .style("top", event.pageY - 28 + "px");
+                  })
+                  .on("mouseout", function () {
+                    tooltip.style("opacity", 0);
+                  })
+                  .transition()
+                  .duration(1000)
+                  .attr("x", (d) => maxLeftBarWidth - xScale(values[attr]))
+                  .attr("width", (d) => xScale(values[attr]));
+
+                if (attr == "num_houses") {
+                  attrGroup
+                    .append("text")
+                    .attr("width", 70)
+                    .attr("x", margin.left + maxLeftBarWidth - 35)
+                    .attr("y", stateIndex * barHeight + barHeight / 2)
+                    .attr("text-anchor", "middle")
+                    .attr("alignment-baseline", "middle")
+                    .text("Number of houses");
+                } else {
+                  attrGroup
+                    .append("text")
+                    .attr("width", 70)
+                    .attr("x", margin.left + maxLeftBarWidth - 35)
+                    .attr("y", stateIndex * barHeight + barHeight / 2)
+                    .attr("text-anchor", "middle")
+                    .attr("alignment-baseline", "middle")
+                    .text(getAttrString(attr));
+                }
+              }
+              if (state == names[1]) {
+                attrGroup
+                  .append("rect")
+                  .attr("class", "bar-right")
+                  .attr("x", margin.left + maxLeftBarWidth + 75)
+                  .attr("y", (stateIndex - 1) * barHeight)
+                  .attr("width", 0)
+                  .attr("height", barHeight)
+                  .attr("rx", 8)
+                  .attr("ry", 8)
+                  .on("mouseover", function (event, d) {
+                    const unit = (attribute) => {
+                      switch (attribute) {
+                        case "acre_lot":
+                          return "acres";
+                        case "bath":
+                          return "baths";
+                        case "bed":
+                          return "beds";
+                        case "house_size":
+                          return "sqft";
+                        case "price":
+                          return "$";
+                        default:
+                          return "units";
+                      }
+                    };
+                    tooltip
+                      .style("opacity", 0.9)
+                      .html(
+                        `${
+                          initialData[state][attr]
+                            ? typeof initialData[state][attr] === "number"
+                              ? initialData[state][attr].toFixed(2)
+                              : initialData[state][attr]
+                            : "No data"
+                        } ${unit(attr)}`
+                      )
+                      .style("left", event.pageX + "px")
+                      .style("top", event.pageY - 28 + "px");
+                  })
+                  .on("mouseout", function () {
+                    tooltip.style("opacity", 0);
+                  })
+                  .transition()
+                  .duration(1000)
+                  .attr("width", xScale(values[attr]));
+              }
+            });
+          });
+
+          chart
+            .append("g")
+            .selectAll("text")
+            .data(Object.keys(data))
+            .enter()
+            .append("text")
+            .attr("x", (d, i) => i * 275 + maxLeftBarWidth - 30 + i * 10)
+            .attr("y", chartHeight + margin.top - 50)
+            .attr("text-anchor", "middle")
+            .text((d) => d);
+
+          const tooltip = d3
+            .select("body")
+            .append("div")
+            .attr("class", "tooltip")
+            .style("opacity", 0);
+
+          function getAttrString(attribute) {
+            let text;
+            switch (attribute) {
+              case "acre_lot":
+                text = "Average number of acres";
+                break;
+              case "num_baths":
+                text = "Average number of bathrooms";
+                break;
+              case "num_beds":
+                text = "Average number of bedrooms";
+                break;
+              case "house_size":
+                text = "Average size of house";
+                break;
+              case "price":
+                text = "Average price";
+                break;
+              default:
+                text = "Number of houses";
+                break;
+            }
+            return text;
+          }
+
+          function scaleData(data) {
+            var counter = 0;
+            var counterAcres = 0;
+            var counterHouse;
+            var counter = 0;
+            var counterAcres = 0;
+            var counterHouseSize = 0;
+            var counterHouseNum = 0;
+            const scaledData = {};
+            for (const [key, values] of Object.entries(data)) {
+              const scaledValues = {};
+              for (const [attr, value] of Object.entries(values)) {
+                var tempValue = value;
+                if (
+                  attr !== "price" &&
+                  attr !== "acre_lot" &&
+                  attr !== "house_size" &&
+                  attr !== "num_houses"
+                ) {
+                  while (tempValue > 10) {
+                    tempValue = tempValue / 10;
+                  }
+                  scaledValues[attr] = tempValue;
+                } else {
+                  var tempCount = 0;
+                  while (tempValue > 10) {
+                    tempValue = tempValue / 10;
+                    tempCount = tempCount + 1;
+                  }
+                  if (attr == "price") {
+                    if (tempCount > counter) {
+                      counter = tempCount;
+                    }
+                  }
+                  if (attr == "acre_lot") {
+                    if (tempCount > counterAcres) {
+                      counterAcres = tempCount;
+                    }
+                  }
+                  if (attr == "house_size") {
+                    if (tempCount > counterHouseSize) {
+                      counterHouseSize = tempCount;
+                    }
+                  }
+                  if (attr == "num_houses") {
+                    if (tempCount > counterHouseNum) {
+                      counterHouseNum = tempCount;
+                    }
+                  }
+                }
+                scaledData[key] = scaledValues;
+              }
+            }
+            for (const [key, values] of Object.entries(data)) {
+              const scaledValues = {};
+              for (const [attr, value] of Object.entries(values)) {
+                var tempCount = 0;
+                if (attr == "price") {
+                  tempCount = counter;
+                }
+                if (attr == "acre_lot") {
+                  tempCount = counterAcres;
+                }
+                if (attr == "house_size") {
+                  tempCount = counterHouseSize;
+                }
+                if (attr == "num_houses") {
+                  tempCount = counterHouseNum;
+                }
+                if (
+                  attr == "price" ||
+                  attr == "acre_lot" ||
+                  attr == "house_size" ||
+                  attr == "num_houses"
+                ) {
+                  var tempValue = value;
+                  while (tempCount !== 0) {
+                    tempValue = tempValue / 10;
+                    tempCount -= 1;
+                    scaledValues[attr] = tempValue;
+                  }
+                }
+              }
+              Object.assign(scaledData[key], scaledValues);
+            }
+            return scaledData;
+          }
+        });
+      </script>
+    </div>
+  </body>
+</html>
